@@ -1,0 +1,299 @@
+# BOSS Platform — Huly Lite on Akash
+# Minimal deployable Huly stack for Web3
+---
+version: "2.0"
+
+services:
+  # ============================================================
+  # Database (CockroachDB single node)
+  # ============================================================
+  cockroach:
+    image: cockroachdb/cockroach:latest-v24.2
+    command:
+      - start-single-node
+      - --accept-sql-without-tls
+      - --store=/cockroach/cockroach-data
+    env:
+      - COCKROACH_DATABASE=huly
+      - COCKROACH_USER=huly
+      - COCKROACH_PASSWORD=huly_boss_2026
+    expose:
+      - port: 26257
+        as: 26257
+        to:
+          - local: true
+
+  # ============================================================
+  # Object Storage (MinIO)
+  # ============================================================
+  minio:
+    image: minio/minio:latest
+    command:
+      - server
+      - /data
+      - --address
+      - ":9000"
+    env:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    expose:
+      - port: 9000
+        as: 9000
+        to:
+          - local: true
+
+  # ============================================================
+  # Huly Application Services
+  # ============================================================
+  transactor:
+    image: hardcoreeng/transactor:v0.7.423
+    env:
+      - SERVER_PORT=3333
+      - SERVER_SECRET=huly_secret_boss_2026
+      - DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - FRONT_URL=http://localhost:8087
+      - ACCOUNTS_URL=http://localhost:3000
+      - FULLTEXT_URL=http://localhost:4700
+      - STATS_URL=http://localhost:4900
+    expose:
+      - port: 3333
+        as: 3333
+        to:
+          - local: true
+
+  account:
+    image: hardcoreeng/account:v0.7.423
+    env:
+      - SERVER_PORT=3000
+      - SERVER_SECRET=huly_secret_boss_2026
+      - DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
+      - TRANSACTOR_URL=ws://localhost:3333
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - FRONT_URL=http://localhost:8087
+      - MODEL_ENABLED=*
+      - QUEUE_CONFIG=localhost:9092
+    expose:
+      - port: 3000
+        as: 3000
+        to:
+          - local: true
+
+  workspace:
+    image: hardcoreeng/workspace:v0.7.423
+    env:
+      - SERVER_SECRET=huly_secret_boss_2026
+      - DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
+      - TRANSACTOR_URL=ws://localhost:3333
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - MODEL_ENABLED=*
+      - ACCOUNTS_URL=http://localhost:3000
+      - STATS_URL=http://localhost:4900
+      - ACCOUNTS_DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
+
+  collaborator:
+    image: hardcoreeng/collaborator:v0.7.423
+    env:
+      - COLLABORATOR_PORT=3078
+      - SECRET=huly_secret_boss_2026
+      - ACCOUNTS_URL=http://localhost:3000
+      - STATS_URL=http://localhost:4900
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+    expose:
+      - port: 3078
+        as: 3078
+        to:
+          - local: true
+
+  rekoni:
+    image: hardcoreeng/rekoni-service:v0.7.423
+    env:
+      - SECRET=huly_secret_boss_2026
+    expose:
+      - port: 4004
+        as: 4004
+        to:
+          - local: true
+
+  stats:
+    image: hardcoreeng/stats:v0.7.423
+    env:
+      - PORT=4900
+      - SERVER_SECRET=huly_secret_boss_2026
+    expose:
+      - port: 4900
+        as: 4900
+        to:
+          - local: true
+
+  front:
+    image: hardcoreeng/front:v0.7.423
+    env:
+      - SERVER_PORT=8080
+      - SERVER_SECRET=huly_secret_boss_2026
+      - ACCOUNTS_URL=http://localhost/_accounts
+      - ACCOUNTS_URL_INTERNAL=http://localhost:3000
+      - REKONI_URL=http://localhost/_rekoni
+      - STATS_URL=http://localhost/_stats
+      - UPLOAD_URL=/files
+      - COLLABORATOR_URL=ws://localhost/_collaborator
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - TITLE=BOSS Platform
+      - DEFAULT_LANGUAGE=en
+      - LAST_NAME_FIRST=false
+      - DISABLED_FEATURES=auto-translate,mailboxes
+    expose:
+      - port: 8080
+        as: 80
+        to:
+          - global: true
+        http_options:
+          max_body_size: 104857600
+          read_timeout: 120000
+          send_timeout: 120000
+
+profiles:
+  compute:
+    cockroach:
+      resources:
+        cpu:
+          units: 1.0
+        memory:
+          size: 2Gi
+        storage:
+          - size: 5Gi
+    minio:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 1Gi
+        storage:
+          - size: 5Gi
+    transactor:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    account:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    workspace:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    collaborator:
+      resources:
+        cpu:
+          units: 0.3
+        memory:
+          size: 256Mi
+        storage:
+          - size: 1Gi
+    rekoni:
+      resources:
+        cpu:
+          units: 0.3
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    stats:
+      resources:
+        cpu:
+          units: 0.1
+        memory:
+          size: 128Mi
+        storage:
+          - size: 1Gi
+    front:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+
+  placement:
+    akash:
+      attributes:
+        host: akash
+      pricing:
+        cockroach:
+          denom: uakt
+          amount: 2000
+        minio:
+          denom: uakt
+          amount: 1500
+        transactor:
+          denom: uakt
+          amount: 1000
+        account:
+          denom: uakt
+          amount: 1000
+        workspace:
+          denom: uakt
+          amount: 1000
+        collaborator:
+          denom: uakt
+          amount: 800
+        rekoni:
+          denom: uakt
+          amount: 800
+        stats:
+          denom: uakt
+          amount: 500
+        front:
+          denom: uakt
+          amount: 1000
+
+deployment:
+  cockroach:
+    akash:
+      profile: cockroach
+      count: 1
+  minio:
+    akash:
+      profile: minio
+      count: 1
+  transactor:
+    akash:
+      profile: transactor
+      count: 1
+  account:
+    akash:
+      profile: account
+      count: 1
+  workspace:
+    akash:
+      profile: workspace
+      count: 1
+  collaborator:
+    akash:
+      profile: collaborator
+      count: 1
+  rekoni:
+    akash:
+      profile: rekoni
+      count: 1
+  stats:
+    akash:
+      profile: stats
+      count: 1
+  front:
+    akash:
+      profile: front
+      count: 1
