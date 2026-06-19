@@ -1,0 +1,551 @@
+# BOSS Platform — Huly Core SDL for Akash Network
+# Business Operating Solution System (BO$$)
+# Deploys the full Huly stack on Akash with persistent storage
+---
+version: "2.0"
+
+services:
+  # ============================================================
+  # Database Layer
+  # ============================================================
+  cockroach:
+    image: cockroachdb/cockroach:latest-v24.2
+    command:
+      - start-single-node
+      - --accept-sql-without-tls
+      - --store=/data/cockroach
+    env:
+      - COCKROACH_DATABASE=huly
+      - COCKROACH_USER=huly
+      - COCKROACH_PASSWORD=huly_secret_2026
+    expose:
+      - port: 26257
+        as: 26257
+        to:
+          - local: true
+      - port: 8080
+        as: 8080
+        to:
+          - local: true
+    params:
+      storage:
+        persistent:
+          - name: cockroach-data
+            mount: /data/cockroach
+            size: 10Gi
+
+  # ============================================================
+  # Message Queue
+  # ============================================================
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.6
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://localhost:9092,external://redpanda:19092
+      - --pandaproxy-addr internal://0.0.0.0:8082,external://0.0.0.0:18082
+      - --advertise-pandaproxy-addr internal://localhost:8082,external://localhost:18082
+      - --schema-registry-addr internal://0.0.0.0:8081,external://0.0.0.0:18081
+      - --rpc-addr localhost:33145
+      - --advertise-rpc-addr localhost:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+    env:
+      - REDPANDA_SUPERUSER_USERNAME=huly
+      - REDPANDA_SUPERUSER_PASSWORD=huly_secret_2026
+    expose:
+      - port: 9092
+        as: 9092
+        to:
+          - local: true
+      - port: 8082
+        as: 8082
+        to:
+          - local: true
+      - port: 8081
+        as: 8081
+        to:
+          - local: true
+    params:
+      storage:
+        persistent:
+          - name: redpanda-data
+            mount: /var/lib/redpanda/data
+            size: 5Gi
+
+  # ============================================================
+  # Object Storage (S3-compatible)
+  # ============================================================
+  minio:
+    image: minio/minio
+    command:
+      - server
+      - /data
+      - --address
+      - ":9000"
+      - --console-address
+      - ":9001"
+    env:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+    expose:
+      - port: 9000
+        as: 9000
+        to:
+          - local: true
+      - port: 9001
+        as: 9001
+        to:
+          - local: true
+    params:
+      storage:
+        persistent:
+          - name: minio-data
+            mount: /data
+            size: 10Gi
+
+  # ============================================================
+  # Search Engine
+  # ============================================================
+  elastic:
+    image: elasticsearch:7.14.2
+    env:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - http.cors.enabled=true
+      - http.cors.allow-origin=*
+    expose:
+      - port: 9200
+        as: 9200
+        to:
+          - local: true
+    params:
+      storage:
+        persistent:
+          - name: elastic-data
+            mount: /usr/share/elasticsearch/data
+            size: 5Gi
+
+  # ============================================================
+  # Huly Core Services
+  # ============================================================
+  transactor:
+    image: hardcoreeng/transactor:v0.7.423
+    env:
+      - SERVER_PORT=3333
+      - SERVER_SECRET=huly_secret_2026
+      - DB_URL=postgresql://huly:huly_secret_2026@localhost:26257/huly?sslmode=disable
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - FRONT_URL=http://localhost:8087
+      - ACCOUNTS_URL=http://localhost:3000
+      - FULLTEXT_URL=http://localhost:4700
+      - STATS_URL=http://localhost:4900
+      - QUEUE_CONFIG=localhost:9092
+    expose:
+      - port: 3333
+        as: 3333
+        to:
+          - local: true
+    depends_on:
+      - cockroach
+      - redpanda
+      - minio
+
+  account:
+    image: hardcoreeng/account:v0.7.423
+    env:
+      - SERVER_PORT=3000
+      - SERVER_SECRET=huly_secret_2026
+      - DB_URL=postgresql://huly:huly_secret_2026@localhost:26257/huly?sslmode=disable
+      - TRANSACTOR_URL=ws://localhost:3333;ws://localhost/_transactor
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - FRONT_URL=http://localhost
+      - STATS_URL=http://localhost/_stats
+      - MODEL_ENABLED=*
+      - ACCOUNTS_URL=http://localhost/_accounts
+      - QUEUE_CONFIG=localhost:9092
+    expose:
+      - port: 3000
+        as: 3000
+        to:
+          - local: true
+    depends_on:
+      - cockroach
+      - transactor
+
+  workspace:
+    image: hardcoreeng/workspace:v0.7.423
+    env:
+      - SERVER_SECRET=huly_secret_2026
+      - DB_URL=postgresql://huly:huly_secret_2026@localhost:26257/huly?sslmode=disable
+      - TRANSACTOR_URL=ws://localhost:3333
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - MODEL_ENABLED=*
+      - ACCOUNTS_URL=http://localhost:3000
+      - STATS_URL=http://localhost:4900
+      - QUEUE_CONFIG=localhost:9092
+      - ACCOUNTS_DB_URL=postgresql://huly:huly_secret_2026@localhost:26257/huly?sslmode=disable
+    depends_on:
+      - cockroach
+      - transactor
+      - account
+
+  collaborator:
+    image: hardcoreeng/collaborator:v0.7.423
+    env:
+      - COLLABORATOR_PORT=3078
+      - SECRET=huly_secret_2026
+      - ACCOUNTS_URL=http://localhost:3000
+      - STATS_URL=http://localhost:4900
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+    expose:
+      - port: 3078
+        as: 3078
+        to:
+          - local: true
+    depends_on:
+      - account
+      - minio
+
+  rekoni:
+    image: hardcoreeng/rekoni-service:v0.7.423
+    env:
+      - SECRET=huly_secret_2026
+    expose:
+      - port: 4004
+        as: 4004
+        to:
+          - local: true
+
+  fulltext:
+    image: hardcoreeng/fulltext:v0.7.423
+    env:
+      - SERVER_SECRET=huly_secret_2026
+      - DB_URL=postgresql://huly:huly_secret_2026@localhost:26257/huly?sslmode=disable
+      - FULLTEXT_DB_URL=http://localhost:9200
+      - ELASTIC_INDEX_NAME=huly_storage_index
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - REKONI_URL=http://localhost:4004
+      - ACCOUNTS_URL=http://localhost:3000
+      - STATS_URL=http://localhost:4900
+      - QUEUE_CONFIG=localhost:9092
+    depends_on:
+      - elastic
+      - rekoni
+
+  stats:
+    image: hardcoreeng/stats:v0.7.423
+    env:
+      - PORT=4900
+      - SERVER_SECRET=huly_secret_2026
+    expose:
+      - port: 4900
+        as: 4900
+        to:
+          - local: true
+
+  kvs:
+    image: hardcoreeng/hulykvs:v0.7.423
+    env:
+      - HULY_DB_CONNECTION=postgresql://huly:huly_secret_2026@localhost:26257/huly?sslmode=disable
+      - HULY_TOKEN_SECRET=huly_secret_2026
+    expose:
+      - port: 8094
+        as: 8094
+        to:
+          - local: true
+    depends_on:
+      - cockroach
+
+  # ============================================================
+  # Frontend & Web Server
+  # ============================================================
+  front:
+    image: hardcoreeng/front:v0.7.423
+    env:
+      - SERVER_PORT=8080
+      - SERVER_SECRET=huly_secret_2026
+      - ACCOUNTS_URL=http://localhost/_accounts
+      - ACCOUNTS_URL_INTERNAL=http://localhost:3000
+      - REKONI_URL=http://localhost/_rekoni
+      - STATS_URL=http://localhost/_stats
+      - UPLOAD_URL=/files
+      - ELASTIC_URL=http://localhost:9200
+      - COLLABORATOR_URL=ws://localhost/_collaborator
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - TITLE=BOSS Platform
+      - DEFAULT_LANGUAGE=en
+      - LAST_NAME_FIRST=false
+      - DISABLED_FEATURES=auto-translate,mailboxes
+    expose:
+      - port: 8080
+        as: 8080
+        to:
+          - global: true
+        http_options:
+          max_body_size: 104857600
+          read_timeout: 120000
+          send_timeout: 120000
+          next_cases:
+            - error
+            - timeout
+            - 500
+            - 502
+            - 503
+    depends_on:
+      - transactor
+      - account
+      - workspace
+      - collaborator
+      - fulltext
+      - elastic
+      - minio
+
+  # ============================================================
+  # Reverse Proxy
+  # ============================================================
+  nginx:
+    image: nginx:1.21.3
+    expose:
+      - port: 80
+        as: 80
+        to:
+          - global: true
+        http_options:
+          max_body_size: 104857600
+          read_timeout: 120000
+          send_timeout: 120000
+          next_cases:
+            - error
+            - timeout
+            - 500
+            - 502
+            - 503
+    depends_on:
+      - front
+
+profiles:
+  compute:
+    cockroach:
+      resources:
+        cpu:
+          units: 1.0
+        memory:
+          size: 2Gi
+        storage:
+          - size: 12Gi
+    redpanda:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 1Gi
+        storage:
+          - size: 6Gi
+    minio:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 1Gi
+        storage:
+          - size: 12Gi
+    elastic:
+      resources:
+        cpu:
+          units: 1.0
+        memory:
+          size: 2Gi
+        storage:
+          - size: 6Gi
+    transactor:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    account:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    workspace:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    collaborator:
+      resources:
+        cpu:
+          units: 0.3
+        memory:
+          size: 256Mi
+        storage:
+          - size: 1Gi
+    rekoni:
+      resources:
+        cpu:
+          units: 0.3
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    fulltext:
+      resources:
+        cpu:
+          units: 0.3
+        memory:
+          size: 256Mi
+        storage:
+          - size: 1Gi
+    stats:
+      resources:
+        cpu:
+          units: 0.1
+        memory:
+          size: 128Mi
+        storage:
+          - size: 1Gi
+    kvs:
+      resources:
+        cpu:
+          units: 0.3
+        memory:
+          size: 256Mi
+        storage:
+          - size: 1Gi
+    front:
+      resources:
+        cpu:
+          units: 0.5
+        memory:
+          size: 512Mi
+        storage:
+          - size: 1Gi
+    nginx:
+      resources:
+        cpu:
+          units: 0.1
+        memory:
+          size: 128Mi
+        storage:
+          - size: 1Gi
+
+  placement:
+    akash:
+      attributes:
+        host: akash
+      signedBy:
+        anyOf:
+          - "akash1365yvmc4s7wdyh3n2sxf7yj0vxe8jk32c26a5q"
+      pricing:
+        cockroach:
+          denom: uakt
+          amount: 5000
+        redpanda:
+          denom: uakt
+          amount: 2000
+        minio:
+          denom: uakt
+          amount: 2000
+        elastic:
+          denom: uakt
+          amount: 5000
+        transactor:
+          denom: uakt
+          amount: 1500
+        account:
+          denom: uakt
+          amount: 1500
+        workspace:
+          denom: uakt
+          amount: 1500
+        collaborator:
+          denom: uakt
+          amount: 1000
+        rekoni:
+          denom: uakt
+          amount: 1500
+        fulltext:
+          denom: uakt
+          amount: 1000
+        stats:
+          denom: uakt
+          amount: 500
+        kvs:
+          denom: uakt
+          amount: 1000
+        front:
+          denom: uakt
+          amount: 1500
+        nginx:
+          denom: uakt
+          amount: 500
+
+deployment:
+  cockroach:
+    akash:
+      profile: cockroach
+      count: 1
+  redpanda:
+    akash:
+      profile: redpanda
+      count: 1
+  minio:
+    akash:
+      profile: minio
+      count: 1
+  elastic:
+    akash:
+      profile: elastic
+      count: 1
+  transactor:
+    akash:
+      profile: transactor
+      count: 1
+  account:
+    akash:
+      profile: account
+      count: 1
+  workspace:
+    akash:
+      profile: workspace
+      count: 1
+  collaborator:
+    akash:
+      profile: collaborator
+      count: 1
+  rekoni:
+    akash:
+      profile: rekoni
+      count: 1
+  fulltext:
+    akash:
+      profile: fulltext
+      count: 1
+  stats:
+    akash:
+      profile: stats
+      count: 1
+  kvs:
+    akash:
+      profile: kvs
+      count: 1
+  front:
+    akash:
+      profile: front
+      count: 1
+  nginx:
+    akash:
+      profile: nginx
+      count: 1
