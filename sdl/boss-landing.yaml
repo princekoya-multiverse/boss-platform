@@ -1,0 +1,43 @@
+# BOSS Platform — Akash Deployable Landing
+# Single container deployment as proof of concept
+---
+version: "2.0"
+
+services:
+  boss:
+    image: nginx:alpine
+    expose:
+      - port: 80
+        as: 80
+        to:
+          - global: true
+        http_options:
+          max_body_size: 104857600
+          read_timeout: 120000
+          send_timeout: 120000
+
+profiles:
+  compute:
+    boss:
+      resources:
+        cpu:
+          units: 0.1
+        memory:
+          size: 64Mi
+        storage:
+          - size: 256Mi
+
+  placement:
+    akash:
+      attributes:
+        host: akash
+      pricing:
+        boss:
+          denom: uakt
+          amount: 500
+
+deployment:
+  boss:
+    akash:
+      profile: boss
+      count: 1

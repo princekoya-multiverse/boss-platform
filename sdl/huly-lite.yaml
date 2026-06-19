@@ -1,12 +1,8 @@
-# BOSS Platform — Huly Lite on Akash
-# Minimal deployable Huly stack for Web3
+# BOSS Platform — Huly on Akash (service names for internal routing)
 ---
 version: "2.0"
 
 services:
-  # ============================================================
-  # Database (CockroachDB single node)
-  # ============================================================
   cockroach:
     image: cockroachdb/cockroach:latest-v24.2
     command:
@@ -23,9 +19,6 @@ services:
         to:
           - local: true
 
-  # ============================================================
-  # Object Storage (MinIO)
-  # ============================================================
   minio:
     image: minio/minio:latest
     command:
@@ -42,20 +35,17 @@ services:
         to:
           - local: true
 
-  # ============================================================
-  # Huly Application Services
-  # ============================================================
   transactor:
     image: hardcoreeng/transactor:v0.7.423
     env:
       - SERVER_PORT=3333
       - SERVER_SECRET=huly_secret_boss_2026
-      - DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
-      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
-      - FRONT_URL=http://localhost:8087
-      - ACCOUNTS_URL=http://localhost:3000
-      - FULLTEXT_URL=http://localhost:4700
-      - STATS_URL=http://localhost:4900
+      - DB_URL=postgresql://huly:huly_boss_2026@cockroach:26257/huly?sslmode=disable
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://minio:9000
+      - FRONT_URL=http://front:8080
+      - ACCOUNTS_URL=http://account:3000
+      - FULLTEXT_URL=http://fulltext:4700
+      - STATS_URL=http://stats:4900
     expose:
       - port: 3333
         as: 3333
@@ -67,12 +57,11 @@ services:
     env:
       - SERVER_PORT=3000
       - SERVER_SECRET=huly_secret_boss_2026
-      - DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
-      - TRANSACTOR_URL=ws://localhost:3333
-      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
-      - FRONT_URL=http://localhost:8087
+      - DB_URL=postgresql://huly:huly_boss_2026@cockroach:26257/huly?sslmode=disable
+      - TRANSACTOR_URL=ws://transactor:3333
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://minio:9000
+      - FRONT_URL=http://front:8080
       - MODEL_ENABLED=*
-      - QUEUE_CONFIG=localhost:9092
     expose:
       - port: 3000
         as: 3000
@@ -83,22 +72,22 @@ services:
     image: hardcoreeng/workspace:v0.7.423
     env:
       - SERVER_SECRET=huly_secret_boss_2026
-      - DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
-      - TRANSACTOR_URL=ws://localhost:3333
-      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - DB_URL=postgresql://huly:huly_boss_2026@cockroach:26257/huly?sslmode=disable
+      - TRANSACTOR_URL=ws://transactor:3333
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://minio:9000
       - MODEL_ENABLED=*
-      - ACCOUNTS_URL=http://localhost:3000
-      - STATS_URL=http://localhost:4900
-      - ACCOUNTS_DB_URL=postgresql://huly:huly_boss_2026@localhost:26257/huly?sslmode=disable
+      - ACCOUNTS_URL=http://account:3000
+      - STATS_URL=http://stats:4900
+      - ACCOUNTS_DB_URL=postgresql://huly:huly_boss_2026@cockroach:26257/huly?sslmode=disable
 
   collaborator:
     image: hardcoreeng/collaborator:v0.7.423
     env:
       - COLLABORATOR_PORT=3078
       - SECRET=huly_secret_boss_2026
-      - ACCOUNTS_URL=http://localhost:3000
-      - STATS_URL=http://localhost:4900
-      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
+      - ACCOUNTS_URL=http://account:3000
+      - STATS_URL=http://stats:4900
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://minio:9000
     expose:
       - port: 3078
         as: 3078
@@ -126,24 +115,10 @@ services:
         to:
           - local: true
 
-  front:
-    image: hardcoreeng/front:v0.7.423
-    env:
-      - SERVER_PORT=8080
-      - SERVER_SECRET=huly_secret_boss_2026
-      - ACCOUNTS_URL=http://localhost/_accounts
-      - ACCOUNTS_URL_INTERNAL=http://localhost:3000
-      - REKONI_URL=http://localhost/_rekoni
-      - STATS_URL=http://localhost/_stats
-      - UPLOAD_URL=/files
-      - COLLABORATOR_URL=ws://localhost/_collaborator
-      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://localhost:9000
-      - TITLE=BOSS Platform
-      - DEFAULT_LANGUAGE=en
-      - LAST_NAME_FIRST=false
-      - DISABLED_FEATURES=auto-translate,mailboxes
+  nginx:
+    image: nginx:alpine
     expose:
-      - port: 8080
+      - port: 80
         as: 80
         to:
           - global: true
@@ -151,6 +126,28 @@ services:
           max_body_size: 104857600
           read_timeout: 120000
           send_timeout: 120000
+
+  front:
+    image: hardcoreeng/front:v0.7.423
+    env:
+      - SERVER_PORT=8080
+      - SERVER_SECRET=huly_secret_boss_2026
+      - ACCOUNTS_URL=http://nginx/_accounts
+      - ACCOUNTS_URL_INTERNAL=http://account:3000
+      - REKONI_URL=http://nginx/_rekoni
+      - STATS_URL=http://nginx/_stats
+      - UPLOAD_URL=/files
+      - COLLABORATOR_URL=ws://nginx/_collaborator
+      - STORAGE_CONFIG=minio|minio?accessKey=minioadmin&secretKey=minioadmin&endpoint=http://minio:9000
+      - TITLE=BOSS Platform
+      - DEFAULT_LANGUAGE=en
+      - LAST_NAME_FIRST=false
+      - DISABLED_FEATURES=auto-translate,mailboxes
+    expose:
+      - port: 8080
+        as: 8080
+        to:
+          - local: true
 
 profiles:
   compute:
@@ -218,6 +215,14 @@ profiles:
           size: 128Mi
         storage:
           - size: 1Gi
+    nginx:
+      resources:
+        cpu:
+          units: 0.1
+        memory:
+          size: 64Mi
+        storage:
+          - size: 512Mi
     front:
       resources:
         cpu:
@@ -256,6 +261,9 @@ profiles:
         stats:
           denom: uakt
           amount: 500
+        nginx:
+          denom: uakt
+          amount: 300
         front:
           denom: uakt
           amount: 1000
@@ -292,6 +300,10 @@ deployment:
   stats:
     akash:
       profile: stats
+      count: 1
+  nginx:
+    akash:
+      profile: nginx
       count: 1
   front:
     akash:

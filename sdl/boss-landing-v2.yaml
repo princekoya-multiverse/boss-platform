@@ -1,0 +1,32 @@
+---
+version: "2.0"
+services:
+  boss:
+    image: nginx:alpine
+    expose:
+      - port: 80
+        as: 80
+        proto: tcp
+        to:
+          - global: true
+profiles:
+  compute:
+    boss:
+      resources:
+        cpu:
+          units: 0.1
+        memory:
+          size: 128Mi
+        storage:
+          size: 256Mi
+  placement:
+    default:
+      pricing:
+        boss:
+          denom: uakt
+          amount: 50
+deployment:
+  boss:
+    default:
+      profile: boss
+      count: 1
