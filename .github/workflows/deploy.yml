@@ -4,9 +4,6 @@ name: Deploy BOSS Platform
 on:
   push:
     branches: [main]
-    paths:
-      - 'docker/boss-hud/**'
-      - 'sdl/**'
   workflow_dispatch:
 
 env:
