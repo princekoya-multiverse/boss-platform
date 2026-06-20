@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BO$$ HUD &mdash; Empire Dashboard</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            background: #0a0a0f; 
+            color: #e0e0e0; 
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        #particles {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 0;
+            pointer-events: none;
+            background: radial-gradient(ellipse at 20% 50%, rgba(0, 100, 255, 0.05) 0%, transparent 50%),
+                        radial-gradient(ellipse at 80% 50%, rgba(255, 0, 100, 0.05) 0%, transparent 50%);
+        }
+        .app {
+            position: relative;
+            z-index: 1;
+            max-width: 1400px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 1.5rem 2rem 5rem;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .status-bar {
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.65rem 1.25rem;
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 100px;
+            font-size: 0.75rem;
+            color: rgba(255,255,255,0.5);
+            margin-bottom: 2rem;
+        }
+        .status-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; background: #00ff88; box-shadow: 0 0 10px #00ff88; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .status-left { display: flex; align-items: center; gap: 0.5rem; }
+        .network-badge { padding: 0.25rem 0.75rem; background: rgba(255,255,255,0.05); border-radius: 100px; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; }
+        .nav-links { display: flex; gap: 1.5rem; align-items: center; }
+        .nav-links a { color: rgba(255,255,255,0.4); text-decoration: none; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; transition: color 0.3s; }
+        .nav-links a:hover, .nav-links a.active { color: #ffffff; }
+        .dash-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 2rem; }
+        .dash-title h1 { font-size: 2rem; font-weight: 900; letter-spacing: -0.03em; background: linear-gradient(135deg, #ffffff 0%, #8888ff 50%, #ff4488 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .dash-title p { font-size: 0.85rem; color: rgba(255,255,255,0.4); margin-top: 0.25rem; }
+        .dash-actions { display: flex; gap: 0.75rem; }
+        .btn { padding: 0.5rem 1.25rem; border-radius: 100px; border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.7); font-family: 'Inter', sans-serif; font-size: 0.75rem; cursor: pointer; transition: all 0.3s; text-decoration: none; }
+        .btn:hover { background: rgba(255,255,255,0.08); border-color: rgba(255,255,255,0.2); }
+        .btn-primary { background: linear-gradient(135deg, #4488ff, #ff4488); border: none; color: #fff; font-weight: 600; }
+        .btn-primary:hover { opacity: 0.9; }
+        .empire-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: rgba(255,255,255,0.06); border-radius: 16px; overflow: hidden; margin-bottom: 2.5rem; }
+        .empire-stat { background: rgba(255,255,255,0.02); padding: 1.25rem 1.5rem; text-align: center; }
+        .empire-stat .stat-number { font-size: 1.75rem; font-weight: 900; background: linear-gradient(135deg, #4488ff, #88ff88); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+        .empire-stat .stat-label { font-size: 0.7rem; color: rgba(255,255,255,0.4); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 0.25rem; }
+        .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+        .section-header h2 { font-size: 1.1rem; font-weight: 700; color: rgba(255,255,255,0.8); }
+        .section-header span { font-size: 0.75rem; color: rgba(255,255,255,0.3); }
+        .biz-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+        .biz-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; padding: 1.5rem; transition: all 0.3s ease; cursor: pointer; position: relative; overflow: hidden; }
+        .biz-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; border-radius: 16px 16px 0 0; }
+        .biz-card:hover { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.12); transform: translateY(-2px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+        .biz-card.mission-critical::before { background: linear-gradient(90deg, #4488ff, #88ff88); }
+        .biz-card.growth::before { background: linear-gradient(90deg, #ff8844, #ff4488); }
+        .biz-card.stable::before { background: linear-gradient(90deg, #8888ff, #4488ff); }
+        .biz-card.stealth::before { background: linear-gradient(90deg, #666, #999); }
+        .biz-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; }
+        .biz-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); }
+        .biz-status { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.12em; padding: 0.2rem 0.6rem; border-radius: 100px; font-weight: 600; }
+        .biz-status.online { background: rgba(0, 255, 136, 0.12); color: #00ff88; }
+        .biz-status.warning { background: rgba(255, 200, 0, 0.12); color: #ffcc00; }
+        .biz-status.stealth { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.4); }
+        .biz-name { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.15rem; }
+        .biz-desc { font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-bottom: 1rem; }
+        .biz-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1rem; }
+        .biz-metric { background: rgba(255,255,255,0.03); border-radius: 8px; padding: 0.6rem 0.75rem; }
+        .biz-metric .metric-value { font-size: 1rem; font-weight: 700; color: #fff; }
+        .biz-metric .metric-label { font-size: 0.65rem; color: rgba(255,255,255,0.35); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 0.1rem; }
+        .biz-footer { display: flex; justify-content: space-between; align-items: center; padding-top: 0.75rem; border-top: 1px solid rgba(255,255,255,0.04); }
+        .biz-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+        .biz-tag { font-size: 0.6rem; padding: 0.15rem 0.5rem; border-radius: 100px; background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.4); }
+        .biz-drill { font-size: 0.7rem; color: rgba(255,255,255,0.25); transition: color 0.3s; }
+        .biz-card:hover .biz-drill { color: rgba(255,255,255,0.6); }
+        .voice-bar { position: fixed; bottom: 0; left: 0; right: 0; z-index: 100; background: rgba(10, 10, 15, 0.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-top: 1px solid rgba(255,255,255,0.06); padding: 0.75rem 2rem; display: flex; align-items: center; justify-content: center; gap: 1rem; }
+        .voice-bar-inner { max-width: 1400px; width: 100%; display: flex; align-items: center; gap: 1rem; }
+        .voice-input-wrapper { flex: 1; display: flex; align-items: center; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 100px; padding: 0.4rem 0.4rem 0.4rem 1.25rem; transition: all 0.3s; }
+        .voice-input-wrapper:focus-within { border-color: rgba(68, 136, 255, 0.4); background: rgba(255,255,255,0.06); }
+        .voice-input-wrapper input { flex: 1; background: none; border: none; outline: none; color: rgba(255,255,255,0.7); font-family: 'Inter', sans-serif; font-size: 0.85rem; }
+        .voice-input-wrapper input::placeholder { color: rgba(255,255,255,0.25); }
+        .mic-btn { width: 36px; height: 36px; border-radius: 50%; border: none; background: linear-gradient(135deg, #4488ff, #ff4488); color: #fff; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.3s; flex-shrink: 0; }
+        .mic-btn:hover { transform: scale(1.08); box-shadow: 0 0 20px rgba(68, 136, 255, 0.3); }
+        .mic-btn.listening { background: linear-gradient(135deg, #ff4488, #ff8844); animation: mic-pulse 1.2s infinite; }
+        @keyframes mic-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(255, 68, 136, 0.4); } 50% { box-shadow: 0 0 0 12px rgba(255, 68, 136, 0); } }
+        .voice-actions { display: flex; gap: 0.4rem; }
+        .voice-action-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.03); color: rgba(255,255,255,0.4); cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; transition: all 0.3s; }
+        .voice-action-btn:hover { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.7); }
+        .voice-status { font-size: 0.65rem; color: rgba(255,255,255,0.25); white-space: nowrap; letter-spacing: 0.05em; }
+        @media (max-width: 768px) { .app { padding: 1rem 1rem 5rem; } .empire-stats { grid-template-columns: repeat(2, 1fr); } .biz-grid { grid-template-columns: 1fr; } .dash-header { flex-direction: column; align-items: flex-start; gap: 1rem; } .voice-bar { padding: 0.75rem 1rem; } .voice-actions { display: none; } .nav-links a:not(.active) { display: none; } }
+    </style>
+</head>
+<body>
+    <div id="particles"></div>
+    <div class="app">
+        <div class="status-bar">
+            <div class="status-left"><span class="status-dot"></span><span>BOSS HUD &middot; Online</span></div>
+            <div class="nav-links"><a href="#" class="active">Dashboard</a><a href="#">Businesses</a><a href="#">Agents</a><a href="#">Analytics</a><a href="#">Settings</a></div>
+            <span class="network-badge">Akash Network</span>
+        </div>
+        <div class="dash-header">
+            <div class="dash-title"><h1>Empire Overview</h1><p>All your businesses at a glance &middot; Prince Koya</p></div>
+            <div class="dash-actions"><a href="#" class="btn">+ New Business</a><a href="#" class="btn btn-primary">Deploy Agent</a></div>
+        </div>
+        <div class="empire-stats">
+            <div class="empire-stat"><div class="stat-number">.4M</div><div class="stat-label">Total Revenue (ARR)</div></div>
+            <div class="empire-stat"><div class="stat-number">7</div><div class="stat-label">Active Businesses</div></div>
+            <div class="empire-stat"><div class="stat-number">24</div><div class="stat-label">AI Agents Deployed</div></div>
+            <div class="empire-stat"><div class="stat-number">99.7%</div><div class="stat-label">Uptime SLA</div></div>
+        </div>
+        <div class="section-header"><h2>Businesses</h2><span>Drill down into any business</span></div>
+        <div class="biz-grid">
+
+            <div class="biz-card mission-critical">
+                <div class="biz-top">
+                    <div class="biz-icon">&#x2694;</div>
+                    <span class="biz-status online">&#x25CF; Online</span>
+                </div>
+                <div class="biz-name">Warrior World</div>
+                <div class="biz-desc">Flagship gaming ecosystem &amp; Web3 MMO</div>
+                <div class="biz-metrics">
+                    <div class="biz-metric"><div class="metric-value">.2M</div><div class="metric-label">Revenue</div></div>
+                    <div class="biz-metric"><div class="metric-value">42K</div><div class="metric-label">Users/Orders</div></div>
+                    <div class="biz-metric"><div class="metric-value">8</div><div class="metric-label">Agents</div></div>
+                    <div class="biz-metric"><div class="metric-value">A+</div><div class="metric-label">Health</div></div>
+                </div>
+                <div class="biz-footer">
+                    <div class="biz-tags"><span class="biz-tag">#gaming</span> <span class="biz-tag">#web3</span> <span class="biz-tag">#mmo</span></div>
+                    <span class="biz-drill">View Details &rarr;</span>
+                </div>
+            </div>
+            <div class="biz-card growth">
+                <div class="biz-top">
+                    <div class="biz-icon">&#x1F399;</div>
+                    <span class="biz-status online">&#x25CF; Online</span>
+                </div>
+                <div class="biz-name">Media Empire</div>
+                <div class="biz-desc">Content network, podcasting &amp; digital media</div>
+                <div class="biz-metrics">
+                    <div class="biz-metric"><div class="metric-value">20K</div><div class="metric-label">Revenue</div></div>
+                    <div class="biz-metric"><div class="metric-value">128K</div><div class="metric-label">Users/Orders</div></div>
+                    <div class="biz-metric"><div class="metric-value">5</div><div class="metric-label">Agents</div></div>
+                    <div class="biz-metric"><div class="metric-value">A</div><div class="metric-label">Health</div></div>
+                </div>
+                <div class="biz-footer">
+                    <div class="biz-tags"><span class="biz-tag">#media</span> <span class="biz-tag">#podcast</span> <span class="biz-tag">#content</span></div>
+                    <span class="biz-drill">View Details &rarr;</span>
+                </div>
+            </div>
+            <div class="biz-card mission-critical">
+                <div class="biz-top">
+                    <div class="biz-icon">&#x1F916;</div>
+                    <span class="biz-status online">&#x25CF; Online</span>
+                </div>
+                <div class="biz-name">AI SaaS Platform</div>
+                <div class="biz-desc">Enterprise AI agents-as-a-service</div>
+                <div class="biz-metrics">
+                    <div class="biz-metric"><div class="metric-value">40K</div><div class="metric-label">Revenue</div></div>
+                    <div class="biz-metric"><div class="metric-value">1.2K</div><div class="metric-label">Users/Orders</div></div>
+                    <div class="biz-metric"><div class="metric-value">6</div><div class="metric-label">Agents</div></div>
+                    <div class="biz-metric"><div class="metric-value">A+</div><div class="metric-label">Health</div></div>
+                </div>
+                <div class="biz-footer">
+                    <div class="biz-tags"><span class="biz-tag">#saas</span> <span class="biz-tag">#ai</span> <span class="biz-tag">#enterprise</span></div>
+                    <span class="biz-drill">View Details &rarr;</span>
+                </div>
+            </div>
+            <div class="biz-card stable">
+                <div class="biz-top">
+                    <div class="biz-icon">&#x1F6D2;</div>
+                    <span class="biz-status online">&#x25CF; Online</span>
+                </div>
+                <div class="biz-name">E-Commerce Empire</div>
+                <div class="biz-desc">DTC brands, marketplace &amp; fulfillment</div>
+                <div class="biz-metrics">
+                    <div class="biz-metric"><div class="metric-value">80K</div><div class="metric-label">Revenue</div></div>
+                    <div class="biz-metric"><div class="metric-value">8.5K</div><div class="metric-label">Users/Orders</div></div>
+                    <div class="biz-metric"><div class="metric-value">3</div><div class="metric-label">Agents</div></div>
+                    <div class="biz-metric"><div class="metric-value">B+</div><div class="metric-label">Health</div></div>
+                </div>
+                <div class="biz-footer">
+                    <div class="biz-tags"><span class="biz-tag">#ecommerce</span> <span class="biz-tag">#dtc</span></div>
+                    <span class="biz-drill">View Details &rarr;</span>
+                </div>
+            </div>
+            <div class="biz-card growth">
+                <div class="biz-top">
+                    <div class="biz-icon">&#x26D3;</div>
+                    <span class="biz-status warning">&#x25CF; Scaling</span>
+                </div>
+                <div class="biz-name">Blockchain Ventures</div>
+                <div class="biz-desc">Web3 infra, DeFi &amp; token engineering</div>
+                <div class="biz-metrics">
+                    <div class="biz-metric"><div class="metric-value">5K</div><div class="metric-label">Revenue</div></div>
+                    <div class="biz-metric"><div class="metric-value">3</div><div class="metric-label">Users/Orders</div></div>
+                    <div class="biz-metric"><div class="metric-value">2</div><div class="metric-label">Agents</div></div>
+                    <div class="biz-metric"><div class="metric-value">B</div><div class="metric-label">Health</div></div>
+                </div>
+                <div class="biz-footer">
+                    <div class="biz-tags"><span class="biz-tag">#defi</span> <span class="biz-tag">#web3</span> <span class="biz-tag">#infra</span></div>
+                    <span class="biz-drill">View Details &rarr;</span>
+                </div>
+            </div>
+            <div class="biz-card stable">
+                <div class="biz-top">
+                    <div class="biz-icon">&#x1F3D7;</div>
+                    <span class="biz-status online">&#x25CF; Online</span>
+                </div>
+                <div class="biz-name">Real Estate Holdings</div>
+                <div class="biz-desc">Digital &amp; physical property portfolio</div>
+                <div class="biz-metrics">
+                    <div class="biz-metric"><div class="metric-value">5K</div><div class="metric-label">Revenue</div></div>
+                    <div class="biz-metric"><div class="metric-value">12</div><div class="metric-label">Users/Orders</div></div>
+                    <div class="biz-metric"><div class="metric-value">2</div><div class="metric-label">Agents</div></div>
+                    <div class="biz-metric"><div class="metric-value">A-</div><div class="metric-label">Health</div></div>
+                </div>
+                <div class="biz-footer">
+                    <div class="biz-tags"><span class="biz-tag">#realestate</span> <span class="biz-tag">#holdings</span></div>
+                    <span class="biz-drill">View Details &rarr;</span>
+                </div>
+            </div>
+            <div class="biz-card stealth">
+                <div class="biz-top">
+                    <div class="biz-icon">&#x1F52E;</div>
+                    <span class="biz-status stealth">&#x25CF; Stealth</span>
+                </div>
+                <div class="biz-name">Project Chimera</div>
+                <div class="biz-desc">Unannounced venture (classified)</div>
+                <div class="biz-metrics">
+                    <div class="biz-metric"><div class="metric-value">&mdash;</div><div class="metric-label">Revenue</div></div>
+                    <div class="biz-metric"><div class="metric-value">&mdash;</div><div class="metric-label">Users/Orders</div></div>
+                    <div class="biz-metric"><div class="metric-value">2</div><div class="metric-label">Agents</div></div>
+                    <div class="biz-metric"><div class="metric-value">N/A</div><div class="metric-label">Health</div></div>
+                </div>
+                <div class="biz-footer">
+                    <div class="biz-tags"><span class="biz-tag">#stealth</span> <span class="biz-tag">#classified</span></div>
+                    <span class="biz-drill">View Details &rarr;</span>
+                </div>
+            </div>
+        </div>
+        <div style="flex:1"></div>
+    </div>
+    <div class="voice-bar">
+        <div class="voice-bar-inner">
+            <div class="voice-status">JARVIS</div>
+            <div class="voice-input-wrapper">
+                <input type="text" placeholder="Talk to Jarvis... or click the mic" id="voiceInput">
+                <button class="mic-btn" id="micBtn" title="Talk to Jarvis">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="voice-actions">
+                <button class="voice-action-btn" title="Toggle voice">&#x1F50A;</button>
+                <button class="voice-action-btn" title="Settings">&#x2699;</button>
+            </div>
+            <div class="voice-status">Idle</div>
+        </div>
+    </div>
+    <script>
+        const canvas = document.createElement('canvas');
+        canvas.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:0';
+        document.getElementById('particles').appendChild(canvas);
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+        window.addEventListener('resize', resize);
+        resize();
+        for(let i = 0; i < 60; i++) {
+            particles.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4, r: Math.random() * 2 + 1 });
+        }
+        function animate() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            particles.forEach((p, i) => {
+                p.x += p.vx; p.y += p.vy;
+                if(p.x < 0) p.x = canvas.width;
+                if(p.x > canvas.width) p.x = 0;
+                if(p.y < 0) p.y = canvas.height;
+                if(p.y > canvas.height) p.y = 0;
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(255,255,255,0.12)';
+                ctx.fill();
+                particles.slice(i+1).forEach(p2 => {
+                    const dx = p.x - p2.x, dy = p.y - p2.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if(dist < 150) {
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = 'rgba(255,255,255,' + (0.04 * (1 - dist/150)) + ')';
+                        ctx.lineWidth = 0.5;
+                        ctx.stroke();
+                    }
+                });
+            });
+            requestAnimationFrame(animate);
+        }
+        animate();
+        const micBtn = document.getElementById('micBtn');
+        const voiceInput = document.getElementById('voiceInput');
+        let listening = false;
+        micBtn.addEventListener('click', function() {
+            listening = !listening;
+            micBtn.classList.toggle('listening', listening);
+            voiceInput.placeholder = listening ? 'Listening... speak now' : 'Talk to Jarvis... or click the mic';
+            if (listening) voiceInput.focus();
+        });
+        document.querySelectorAll('.biz-card').forEach(function(card) {
+            card.addEventListener('click', function() {
+                const name = card.querySelector('.biz-name').textContent;
+                voiceInput.value = 'Show me details for ' + name;
+                voiceInput.focus();
+            });
+        });
+    </script>
+</body>
+</html>
